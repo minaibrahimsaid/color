@@ -1,88 +1,116 @@
 import { useEffect, useState } from "react";
 import { SketchPicker } from "react-color";
+import { Radio } from "antd";
+import styles from "../../styles/Home.module.css";
 
-var color = "#3A16EC";
-export default function Draw() {
-  let oldPt, oldMidPt;
-  const [selectedColor, setSelectedColor] = useState("#3A16EC");
+const CONFIG = {
+  default_color: "#3A16EC",
+  canvas_id: "canvas",
+  canvas_width: 800,
+  canvas_height: 800,
+  stork: 10,
+  stork_style: "round", // One of  butt, round, or square
+  backgroundColor: "#FFFFFF",
+  mode: "draw",
+};
+
+var color = CONFIG.default_color;
+export default function Draw({url}) {
+  const [selectedColor, setSelectedColor] = useState(CONFIG.default_color);
+  const [mode, setMode] = useState("draw");
 
   const createCanvas = () => {
-    const handleMouseDown = (event) => {
-      if (!event.primary) return;
-
-      oldPt = new createjs.Point(stage.mouseX, stage.mouseY);
-      oldMidPt = oldPt.clone();
-      stage.addEventListener("stagemousemove", handleMouseMove);
-    };
-
-    const handleMouseUp = (event) => {
-      if (!event.primary) return;
-      stage.removeEventListener("stagemousemove", handleMouseMove);
-    };
-
-    // move the mouse
-    const handleMouseMove = (event) => {
-      if (!event.primary) return;
-
-      const midPt = new createjs.Point(
-        (oldPt.x + stage.mouseX) >> 1,
-        (oldPt.y + stage.mouseY) >> 1
-      );
-
-      drawingCanvas.graphics
-        .clear()
-        .setStrokeStyle(10, "round", "round")
-        .beginStroke(color)
-        .moveTo(midPt.x, midPt.y)
-        .curveTo(oldPt.x, oldPt.y, oldMidPt.x, oldMidPt.y);
-
-      oldPt.x = stage.mouseX;
-      oldPt.y = stage.mouseY;
-
-      oldMidPt.x = midPt.x;
-      oldMidPt.y = midPt.y;
-
-      stage.update();
-    };
-
-    // access the canvas and necessary elements for drawing
-    const canvas = document.getElementById("drawing");
-    const drawingCanvas = new createjs.Shape();
+    const canvas = document.getElementById(CONFIG.canvas_id);
     const stage = new createjs.Stage(canvas);
-    // render the image
-    const context = canvas.getContext("2d");
-    const image = new Image(canvas.width, canvas.height);
-    context.fillStyle = "#FFFFFF";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    image.src = "http://www.lunapic.com/editor/premade/transparent.gif";
-    image.onload = () => context.drawImage(image, 0, 0);
+    const wrapper = new createjs.Container();
+    const image = new Image(CONFIG.canvas_width, CONFIG.canvas_height);
+    const bitmap = new createjs.Bitmap(image);
+    const drawing = new createjs.Shape();
+    const lastPoint = new createjs.Point();
+    const graphic = new createjs.Graphics()
+      .f("#000")
+      .dr(0, 0, CONFIG.canvas_width, CONFIG.canvas_height);
+    // add the image
+    canvas.style.backgroundColor = CONFIG.backgroundColor;
 
-    stage.autoClear = false;
-    stage.enableDOMEvents(true);
-
-    createjs.Touch.enable(stage);
-    createjs.Ticker.framerate = 24;
-
-    stage.addChild(drawingCanvas);
+    image.src = url;
+    image.width = CONFIG.canvas_width
+    image.height = CONFIG.canvas_height
+    stage.addChild(bitmap);
     stage.update();
-    stage.addEventListener("stagemousedown", handleMouseDown);
-    stage.addEventListener("stagemouseup", handleMouseUp);
+    // add drawing area above the image
+    wrapper.addChild(drawing);
+    stage.addChild(wrapper);
+
+    wrapper.hitArea = new createjs.Shape(graphic);
+    wrapper.cache(0, 0, CONFIG.canvas_width, CONFIG.canvas_height); // Cache it.
+
+    wrapper.addEventListener("mousedown", function (event) {
+      // Store the position. We have to do this because we clear the graphics later.
+      lastPoint.x = event.stageX;
+      lastPoint.y = event.stageY;
+
+      // Listen for mousemove
+      event.addEventListener("mousemove", function (event) {
+        // Draw a round line from the last position to the current one.
+        drawing.graphics.ss(CONFIG.stork, CONFIG.stork_style).s(color);
+        drawing.graphics.mt(lastPoint.x, lastPoint.y);
+        drawing.graphics.lt(event.stageX, event.stageY);
+
+        // Update the last position for next move.
+        lastPoint.x = event.stageX;
+        lastPoint.y = event.stageY;
+        wrapper.updateCache(
+          CONFIG.mode === "erase" ? "destination-out" : "source-over"
+        );
+        drawing.graphics.clear();
+      });
+    });
+
+    createjs.Ticker.addEventListener("tick", stage);
   };
 
   useEffect(() => {
     createCanvas();
-  }, []);
+  }, [url]);
 
+  const changeConfig = (key, value) => {
+    CONFIG[key] = value;
+  };
   return (
-    <>
-      <SketchPicker
-        color={selectedColor}
-        onChange={({ hex: c }) => {
-          color = c;
-          setSelectedColor(c);
-        }}
-      />
-      <canvas id="drawing" width="500" height="300" />
-    </>
+    <div className={styles.drawContainer}>
+      <div>
+        <Radio.Group
+          value={mode}
+          onChange={(e) => {
+            changeConfig("mode", e.target.value);
+            setMode(e.target.value);
+          }}
+          className={styles.modeControl}
+        >
+          <Radio.Button style={{ width: "50%" }} value="draw">
+            Draw
+          </Radio.Button>
+          <Radio.Button style={{ width: "50%" }} value="erase">
+            Erase
+          </Radio.Button>
+        </Radio.Group>
+        <SketchPicker
+          color={selectedColor}
+          onChange={({ hex: c }) => {
+            color = c;
+            setSelectedColor(c);
+          }}
+          disableAlpha
+        />
+      </div>
+      <div className={styles.drawArea}>
+        <canvas
+          id={CONFIG.canvas_id}
+          width={CONFIG.canvas_width}
+          height={CONFIG.canvas_height}
+        />
+      </div>
+    </div>
   );
 }

@@ -36,7 +36,7 @@ export default function Home() {
         <title>Color the drawing</title>
         <meta name="description" content="Color the drawing" />
         <link rel="icon" href="/favicon.ico" />
-        <script src="https:////code.createjs.com/createjs-2013.02.12.min.js"></script>
+        <script src="https:////code.createjs.com/createjs-2013.02.12.min.js" async />
       </Head>
       <DrawingCanvas url={selectedImage} />
     </div>
